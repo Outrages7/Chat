@@ -1,0 +1,42 @@
+version: '3.8'
+services:
+  mongodb:
+    image: mongo:latest
+    container_name: chat-mongodb
+    volumes:
+      - mongodb_data:/data/db
+    networks:
+      - chat-network
+
+  backend:
+    image: fnatics7/chat-backend:latest
+    container_name: chat-backend
+    environment:
+      - NODE_ENV=production
+      - MONGO_DB_URI=mongodb://mongodb:27017/chat-app
+      - JWT_SECRET=${JWT_SECRET}
+      - PORT=3000
+      - DOMAIN=${DOMAIN}
+    depends_on:
+      - mongodb
+    networks:
+      - chat-network
+
+  frontend:
+    image: fnatics7/chat-frontend:latest
+    container_name: chat-frontend
+    ports:
+      - "80:80"
+    environment:
+      - VITE_API_URL=http://${DOMAIN}
+    depends_on:
+      - backend
+    networks:
+      - chat-network
+
+networks:
+  chat-network:
+    driver: bridge
+
+volumes:
+  mongodb_data:
