@@ -1,4 +1,4 @@
-name: CD
+name: CI/CD Pipeline
 
 on:
   push:
@@ -8,10 +8,9 @@ on:
 env:
   DOCKER_HUB_USERNAME: fnatics7
   BACKEND_IMAGE_NAME: fnatics7/chat-backend
-  FRONTEND_IMAGE_NAME: fnatics7/chat-frontend
 
 jobs:
-  build-and-push:
+  build-and-push-backend:
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -30,9 +29,7 @@ jobs:
       id: meta
       uses: docker/metadata-action@v4
       with:
-        images: |
-          ${{ env.BACKEND_IMAGE_NAME }}
-          ${{ env.FRONTEND_IMAGE_NAME }}
+        images: ${{ env.BACKEND_IMAGE_NAME }}
         tags: |
           type=semver,pattern={{version}}
           type=sha,format=long
@@ -46,28 +43,29 @@ jobs:
         tags: ${{ steps.meta.outputs.tags }}
         labels: ${{ steps.meta.outputs.labels }}
 
-    - name: Build and push Frontend Docker image
-      uses: docker/build-push-action@v4
-      with:
-        context: ./frontend
-        push: true
-        tags: ${{ steps.meta.outputs.tags }}
-        labels: ${{ steps.meta.outputs.labels }}
-
-  deploy:
-    needs: build-and-push
+  deploy-frontend:
     runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v')
+    permissions:
+      contents: write
     
     steps:
-    - name: Deploy to Production
-      uses: appleboy/ssh-action@master
+    - uses: actions/checkout@v3
+
+    - name: Setup Node.js
+      uses: actions/setup-node@v3
       with:
-        host: ${{ secrets.DEPLOY_HOST }}
-        username: ${{ secrets.DEPLOY_USER }}
-        key: ${{ secrets.DEPLOY_KEY }}
-        script: |
-          cd /opt/chat-app
-          docker-compose pull
-          docker-compose up -d
-          docker system prune -f
+        node-version: '18'
+        cache: 'npm'
+        cache-dependency-path: './frontend/package-lock.json'
+
+    - name: Install and Build Frontend
+      run: |
+        cd frontend
+        npm ci
+        npm run build
+      
+    - name: Deploy to GitHub Pages
+      uses: peaceiris/actions-gh-pages@v3
+      with:
+        github_token: ${{ secrets.GITHUB_TOKEN }}
+        publish_dir: ./frontend/dist
